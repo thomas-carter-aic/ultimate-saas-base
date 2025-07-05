@@ -12,6 +12,10 @@ import rateLimit from 'express-rate-limit';
 import { trace, context } from '@opentelemetry/api';
 
 import { CreateTenantUseCase } from '../../application/usecases/CreateTenantUseCase';
+import { GetTenantUseCase } from '../../application/usecases/GetTenantUseCase';
+import { UpdateTenantUseCase } from '../../application/usecases/UpdateTenantUseCase';
+import { ListTenantsUseCase } from '../../application/usecases/ListTenantsUseCase';
+import { TenantUsageAnalyticsUseCase } from '../../application/usecases/TenantUsageAnalyticsUseCase';
 import { Logger } from '../../application/ports/Logger';
 
 export interface AuthenticatedRequest extends Request {
@@ -30,6 +34,10 @@ export class TenantController {
 
   constructor(
     private readonly createTenantUseCase: CreateTenantUseCase,
+    private readonly getTenantUseCase: GetTenantUseCase,
+    private readonly updateTenantUseCase: UpdateTenantUseCase,
+    private readonly listTenantsUseCase: ListTenantsUseCase,
+    private readonly tenantUsageAnalyticsUseCase: TenantUsageAnalyticsUseCase,
     private readonly logger: Logger
   ) {
     this.router = Router();
@@ -299,18 +307,30 @@ export class TenantController {
   private async getTenant(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
+      const userId = req.user!.id;
+      const userRole = req.user!.roles.includes('admin') ? 'admin' : 'owner';
 
-      // This would call GetTenantUseCase
-      // For now, return a placeholder response
-      res.json({
-        success: true,
-        data: {
-          tenant: {
-            id,
-            message: 'Tenant retrieval not yet implemented'
-          }
-        }
+      const result = await this.getTenantUseCase.execute({
+        tenantId: id,
+        requesterId: userId,
+        requesterRole: userRole
       });
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: {
+            tenant: result.tenant
+          }
+        });
+      } else {
+        const statusCode = result.error === 'Tenant not found' ? 404 : 
+                          result.error === 'Unauthorized access to tenant' ? 403 : 400;
+        res.status(statusCode).json({
+          success: false,
+          error: result.error
+        });
+      }
     } catch (error) {
       next(error);
     }
@@ -345,21 +365,31 @@ export class TenantController {
   private async updateTenant(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
+      const userId = req.user!.id;
       const updates = req.body;
 
-      // This would call UpdateTenantUseCase
-      // For now, return a placeholder response
-      res.json({
-        success: true,
-        data: {
-          tenant: {
-            id,
-            updates,
-            message: 'Tenant update not yet implemented'
-          }
-        },
-        message: 'Tenant updated successfully'
+      const result = await this.updateTenantUseCase.execute({
+        tenantId: id,
+        requesterId: userId,
+        updates
       });
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: {
+            tenant: result.tenant
+          },
+          message: 'Tenant updated successfully'
+        });
+      } else {
+        const statusCode = result.error === 'Tenant not found' ? 404 : 
+                          result.error?.includes('Unauthorized') ? 403 : 400;
+        res.status(statusCode).json({
+          success: false,
+          error: result.error
+        });
+      }
     } catch (error) {
       next(error);
     }
@@ -371,22 +401,41 @@ export class TenantController {
   private async listUserTenants(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { page = 1, limit = 20, status } = req.query;
+      const userRole = req.user!.roles.includes('admin') ? 'admin' : 'owner';
+      const { page = 1, limit = 20, status, plan, search } = req.query;
 
-      // This would call ListUserTenantsUseCase
-      // For now, return a placeholder response
-      res.json({
-        success: true,
-        data: {
-          tenants: [],
-          pagination: {
-            page: Number(page),
-            limit: Number(limit),
-            total: 0,
-            totalPages: 0
-          }
+      const result = await this.listTenantsUseCase.execute({
+        requesterId: userId,
+        requesterRole: userRole,
+        filters: {
+          status: status as any,
+          plan: plan as any,
+          search: search as string
+        },
+        pagination: {
+          page: Number(page),
+          limit: Number(limit)
+        },
+        sorting: {
+          field: 'createdAt',
+          direction: 'desc'
         }
       });
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: {
+            tenants: result.tenants,
+            pagination: result.pagination
+          }
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: result.error
+        });
+      }
     } catch (error) {
       next(error);
     }
@@ -398,20 +447,42 @@ export class TenantController {
   private async getTenantUsage(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
+      const userId = req.user!.id;
+      const userRole = req.user!.roles.includes('admin') ? 'admin' : 'owner';
+      const { startDate, endDate, metrics } = req.query;
 
-      // This would call GetTenantUsageUseCase
-      // For now, return a placeholder response
-      res.json({
-        success: true,
-        data: {
-          usage: {
-            users: { current: 0, limit: 10, percentage: 0 },
-            storage: { current: 0, limit: 5, percentage: 0 },
-            apiCalls: { current: 0, limit: 10000, percentage: 0 },
-            aiInteractions: { current: 0, limit: 1000, percentage: 0 }
-          }
-        }
+      const timeRange = startDate && endDate ? {
+        startDate: new Date(startDate as string),
+        endDate: new Date(endDate as string)
+      } : undefined;
+
+      const requestedMetrics = metrics ? 
+        (metrics as string).split(',') as any[] : 
+        undefined;
+
+      const result = await this.tenantUsageAnalyticsUseCase.execute({
+        tenantId: id,
+        requesterId: userId,
+        requesterRole: userRole,
+        timeRange,
+        metrics: requestedMetrics
       });
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: {
+            analytics: result.analytics
+          }
+        });
+      } else {
+        const statusCode = result.error === 'Tenant not found' ? 404 : 
+                          result.error?.includes('Unauthorized') ? 403 : 400;
+        res.status(statusCode).json({
+          success: false,
+          error: result.error
+        });
+      }
     } catch (error) {
       next(error);
     }

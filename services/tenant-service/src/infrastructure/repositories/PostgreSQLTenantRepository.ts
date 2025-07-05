@@ -270,8 +270,137 @@ export class PostgreSQLTenantRepository implements TenantRepository {
   }
 
   /**
-   * Update tenant entity
+   * Find tenants with filters, pagination, and sorting
    */
+  async findWithFilters(options: {
+    filters?: {
+      status?: string;
+      plan?: string;
+      ownerId?: string;
+      search?: string;
+    };
+    pagination?: {
+      page: number;
+      limit: number;
+    };
+    sorting?: {
+      field: string;
+      direction: 'asc' | 'desc';
+    };
+  }): Promise<Tenant[]> {
+    try {
+      let query = 'SELECT * FROM tenants WHERE 1=1';
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      // Apply filters
+      if (options.filters?.status) {
+        query += ` AND status = $${paramIndex}`;
+        params.push(options.filters.status);
+        paramIndex++;
+      }
+
+      if (options.filters?.plan) {
+        query += ` AND plan = $${paramIndex}`;
+        params.push(options.filters.plan);
+        paramIndex++;
+      }
+
+      if (options.filters?.ownerId) {
+        query += ` AND owner_id = $${paramIndex}`;
+        params.push(options.filters.ownerId);
+        paramIndex++;
+      }
+
+      if (options.filters?.search) {
+        query += ` AND (name ILIKE $${paramIndex} OR slug ILIKE $${paramIndex})`;
+        params.push(`%${options.filters.search}%`);
+        paramIndex++;
+      }
+
+      // Apply sorting
+      if (options.sorting) {
+        const sortField = this.mapSortField(options.sorting.field);
+        query += ` ORDER BY ${sortField} ${options.sorting.direction.toUpperCase()}`;
+      } else {
+        query += ' ORDER BY created_at DESC';
+      }
+
+      // Apply pagination
+      if (options.pagination) {
+        const offset = (options.pagination.page - 1) * options.pagination.limit;
+        query += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+        params.push(options.pagination.limit, offset);
+      }
+
+      const result = await this.pool.query(query, params);
+      return result.rows.map(row => this.mapRowToTenant(row));
+
+    } catch (error) {
+      this.logger.error('Error finding tenants with filters', error as Error, { options });
+      throw error;
+    }
+  }
+
+  /**
+   * Count tenants with filters
+   */
+  async countWithFilters(filters?: {
+    status?: string;
+    plan?: string;
+    ownerId?: string;
+    search?: string;
+  }): Promise<number> {
+    try {
+      let query = 'SELECT COUNT(*) FROM tenants WHERE 1=1';
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      // Apply filters
+      if (filters?.status) {
+        query += ` AND status = $${paramIndex}`;
+        params.push(filters.status);
+        paramIndex++;
+      }
+
+      if (filters?.plan) {
+        query += ` AND plan = $${paramIndex}`;
+        params.push(filters.plan);
+        paramIndex++;
+      }
+
+      if (filters?.ownerId) {
+        query += ` AND owner_id = $${paramIndex}`;
+        params.push(filters.ownerId);
+        paramIndex++;
+      }
+
+      if (filters?.search) {
+        query += ` AND (name ILIKE $${paramIndex} OR slug ILIKE $${paramIndex})`;
+        params.push(`%${filters.search}%`);
+        paramIndex++;
+      }
+
+      const result = await this.pool.query(query, params);
+      return parseInt(result.rows[0].count);
+
+    } catch (error) {
+      this.logger.error('Error counting tenants with filters', error as Error, { filters });
+      throw error;
+    }
+  }
+
+  private mapSortField(field: string): string {
+    const fieldMap: Record<string, string> = {
+      'name': 'name',
+      'createdAt': 'created_at',
+      'updatedAt': 'updated_at',
+      'status': 'status',
+      'plan': 'plan'
+    };
+
+    return fieldMap[field] || 'created_at';
+  }
   async update(tenant: Tenant): Promise<Tenant> {
     const client = await this.pool.connect();
     
