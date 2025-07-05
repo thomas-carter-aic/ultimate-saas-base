@@ -1,0 +1,381 @@
+# Default values for Ultimate AI-Native SaaS Platform
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  imageRegistry: ghcr.io
+  imagePullSecrets: []
+  storageClass: ""
+  environment: production
+
+# Image configuration
+image:
+  registry: ghcr.io
+  repository: thomas-carter-aic/ultimate-saas-base
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Service configuration
+services:
+  userService:
+    enabled: true
+    name: user-service
+    port: 3001
+    targetPort: 3001
+    replicas: 3
+    image:
+      repository: user-service
+      tag: latest
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    env:
+      NODE_ENV: production
+      PORT: 3001
+      LOG_LEVEL: info
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+  tenantService:
+    enabled: true
+    name: tenant-service
+    port: 3002
+    targetPort: 3002
+    replicas: 3
+    image:
+      repository: tenant-service
+      tag: latest
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    env:
+      NODE_ENV: production
+      PORT: 3002
+      LOG_LEVEL: info
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+  pluginService:
+    enabled: true
+    name: plugin-service
+    port: 3003
+    targetPort: 3003
+    replicas: 3
+    image:
+      repository: plugin-service
+      tag: latest
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    env:
+      NODE_ENV: production
+      PORT: 3003
+      LOG_LEVEL: info
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 20
+      targetCPUUtilizationPercentage: 70
+      targetMemoryUtilizationPercentage: 80
+
+  aiService:
+    enabled: true
+    name: ai-service
+    port: 3004
+    targetPort: 3004
+    replicas: 2
+    image:
+      repository: ai-service
+      tag: latest
+    resources:
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+      limits:
+        cpu: 4000m
+        memory: 8Gi
+    env:
+      NODE_ENV: production
+      PORT: 3004
+      LOG_LEVEL: info
+      TENSORFLOW_BACKEND: cpu
+      PYTORCH_BACKEND: cpu
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 15
+      targetCPUUtilizationPercentage: 60
+      targetMemoryUtilizationPercentage: 70
+    gpu:
+      enabled: false
+      nodeSelector:
+        accelerator: nvidia-tesla-v100
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: api.ultimate-saas.com
+      paths:
+        - path: /api/v1/users
+          pathType: Prefix
+          service: user-service
+        - path: /api/v1/tenants
+          pathType: Prefix
+          service: tenant-service
+        - path: /api/v1/plugins
+          pathType: Prefix
+          service: plugin-service
+        - path: /api/v1/ai
+          pathType: Prefix
+          service: ai-service
+  tls:
+    - secretName: platform-tls
+      hosts:
+        - api.ultimate-saas.com
+
+# Database configuration
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "secure-password"
+    database: "platform_db"
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: fast-ssd
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "secure-redis-password"
+  master:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: fast-ssd
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# Kafka configuration
+kafka:
+  enabled: true
+  replicaCount: 3
+  auth:
+    clientProtocol: plaintext
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: fast-ssd
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+  metrics:
+    kafka:
+      enabled: true
+    jmx:
+      enabled: true
+  zookeeper:
+    replicaCount: 3
+    persistence:
+      enabled: true
+      size: 10Gi
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    server:
+      persistentVolume:
+        enabled: true
+        size: 100Gi
+        storageClass: standard
+      resources:
+        requests:
+          cpu: 500m
+          memory: 2Gi
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+      retention: "30d"
+    alertmanager:
+      enabled: true
+      persistentVolume:
+        enabled: true
+        size: 5Gi
+      config:
+        global:
+          smtp_smarthost: 'localhost:587'
+          smtp_from: 'alerts@ultimate-saas.com'
+        route:
+          group_by: ['alertname']
+          group_wait: 10s
+          group_interval: 10s
+          repeat_interval: 1h
+          receiver: 'web.hook'
+        receivers:
+          - name: 'web.hook'
+            webhook_configs:
+              - url: 'http://webhook-service:8080/alerts'
+
+  grafana:
+    enabled: true
+    adminPassword: "secure-grafana-password"
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: standard
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    dashboardProviders:
+      dashboardproviders.yaml:
+        apiVersion: 1
+        providers:
+          - name: 'default'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
+    dashboards:
+      default:
+        platform-overview:
+          gnetId: 1860
+          revision: 27
+          datasource: Prometheus
+
+# Security configuration
+security:
+  networkPolicies:
+    enabled: true
+  podSecurityPolicy:
+    enabled: true
+  rbac:
+    create: true
+  serviceAccount:
+    create: true
+    name: ""
+
+# Storage configuration
+persistence:
+  storageClass: "fast-ssd"
+  accessMode: ReadWriteOnce
+  size: 10Gi
+
+# Node selection and tolerations
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Service mesh (Istio) configuration
+serviceMesh:
+  enabled: false
+  istio:
+    enabled: false
+    gateway:
+      enabled: false
+    virtualService:
+      enabled: false
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  retention: "30d"
+  storage:
+    size: 500Gi
+    storageClass: standard
+
+# External secrets
+externalSecrets:
+  enabled: false
+  secretStore:
+    provider: aws
+    region: us-west-2
+
+# Custom resource definitions
+customResources:
+  enabled: true
+
+# Feature flags
+features:
+  aiService:
+    gpu: false
+    distributedTraining: true
+    modelCaching: true
+  pluginService:
+    sandboxing: true
+    marketplace: true
+  monitoring:
+    tracing: true
+    logging: true
+    metrics: true

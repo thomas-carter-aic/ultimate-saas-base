@@ -1,0 +1,292 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Ultimate AI-Native SaaS Platform - Overview",
+    "tags": ["platform", "overview", "saas"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Platform Health Overview",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "up{job=~\"user-service|tenant-service|plugin-service|ai-service\"}",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "mappings": [
+              {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+              {"options": {"1": {"text": "UP"}}, "type": "value"}
+            ]
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "orientation": "horizontal",
+          "textMode": "auto",
+          "colorMode": "background"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate (req/sec)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (job)",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Requests/sec", "min": 0},
+          {"show": false}
+        ],
+        "legend": {"show": true, "values": true, "current": true},
+        "tooltip": {"shared": true, "sort": 2}
+      },
+      {
+        "id": 3,
+        "title": "Response Time (95th percentile)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (job, le))",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Seconds", "min": 0},
+          {"show": false}
+        ],
+        "legend": {"show": true, "values": true, "current": true},
+        "tooltip": {"shared": true, "sort": 2}
+      },
+      {
+        "id": 4,
+        "title": "Error Rate (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (job) / sum(rate(http_requests_total[5m])) by (job) * 100",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Percentage", "min": 0, "max": 100},
+          {"show": false}
+        ],
+        "legend": {"show": true, "values": true, "current": true},
+        "tooltip": {"shared": true, "sort": 2},
+        "thresholds": [
+          {"value": 1, "colorMode": "critical", "op": "gt"},
+          {"value": 5, "colorMode": "critical", "op": "gt"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Active Users",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "user_service_active_users_total",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Active Tenants",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 16},
+        "targets": [
+          {
+            "expr": "tenant_service_active_tenants_total",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "short"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "AI Model Predictions/sec",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(rate(ai_service_predictions_total[5m]))",
+            "legendFormat": "Predictions/sec",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Predictions/sec", "min": 0},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Plugin Executions/sec",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(rate(plugin_executions_total[5m]))",
+            "legendFormat": "Executions/sec",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Executions/sec", "min": 0},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Resource Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "100 - (avg(irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "CPU Usage %",
+            "refId": "A"
+          },
+          {
+            "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+            "legendFormat": "Memory Usage %",
+            "refId": "B"
+          }
+        ],
+        "yAxes": [
+          {"label": "Percentage", "min": 0, "max": 100},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Database Connections",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends",
+            "legendFormat": "{{datname}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Connections", "min": 0},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Cache Hit Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40},
+        "targets": [
+          {
+            "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) * 100",
+            "legendFormat": "Redis Hit Rate %",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Percentage", "min": 0, "max": 100},
+          {"show": false}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Kafka Message Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 48},
+        "targets": [
+          {
+            "expr": "sum(rate(kafka_server_brokertopicmetrics_messagesin_total[5m])) by (topic)",
+            "legendFormat": "{{topic}}",
+            "refId": "A"
+          }
+        ],
+        "yAxes": [
+          {"label": "Messages/sec", "min": 0},
+          {"show": false}
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "query",
+          "query": "label_values(up, environment)",
+          "current": {"text": "production", "value": "production"},
+          "options": [],
+          "refresh": 1
+        },
+        {
+          "name": "service",
+          "type": "query",
+          "query": "label_values(up{environment=\"$environment\"}, job)",
+          "current": {"text": "All", "value": "$__all"},
+          "options": [],
+          "refresh": 1,
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "expr": "changes(up[1m]) > 0",
+          "titleFormat": "Service Restart",
+          "textFormat": "{{job}} restarted",
+          "iconColor": "blue"
+        }
+      ]
+    }
+  }
+}

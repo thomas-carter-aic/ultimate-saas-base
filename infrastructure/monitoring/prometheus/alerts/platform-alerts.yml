@@ -1,0 +1,357 @@
+# Platform-wide alerting rules for Ultimate AI-Native SaaS Platform
+# Comprehensive monitoring with intelligent alerting
+
+groups:
+  # Service Health Alerts
+  - name: service-health
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute."
+          runbook_url: "https://docs.platform.com/runbooks/service-down"
+
+      - alert: ServiceHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "High error rate on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} has error rate of {{ $value | humanizePercentage }} for more than 2 minutes."
+
+      - alert: ServiceHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High latency on {{ $labels.job }}"
+          description: "Service {{ $labels.job }} has 95th percentile latency of {{ $value }}s for more than 5 minutes."
+
+  # User Service Alerts
+  - name: user-service
+    rules:
+      - alert: UserServiceHighAuthFailures
+        expr: rate(user_auth_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: user-service
+          category: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "User service has {{ $value }} authentication failures per second for more than 2 minutes."
+
+      - alert: UserServiceDatabaseConnectionIssues
+        expr: user_service_db_connections_failed_total > 5
+        for: 1m
+        labels:
+          severity: critical
+          service: user-service
+          category: database
+        annotations:
+          summary: "User service database connection issues"
+          description: "User service has {{ $value }} failed database connections."
+
+  # Tenant Service Alerts
+  - name: tenant-service
+    rules:
+      - alert: TenantServiceBillingProcessingDelay
+        expr: tenant_billing_processing_delay_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: tenant-service
+          category: billing
+        annotations:
+          summary: "Billing processing delay"
+          description: "Tenant service billing processing is delayed by {{ $value }}s."
+
+      - alert: TenantServiceQuotaExceeded
+        expr: tenant_resource_usage_ratio > 0.9
+        for: 2m
+        labels:
+          severity: warning
+          service: tenant-service
+          category: resources
+        annotations:
+          summary: "Tenant quota nearly exceeded"
+          description: "Tenant {{ $labels.tenant_id }} is using {{ $value | humanizePercentage }} of their quota."
+
+  # Plugin Service Alerts
+  - name: plugin-service
+    rules:
+      - alert: PluginExecutionFailures
+        expr: rate(plugin_executions_failed_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+          service: plugin-service
+          category: execution
+        annotations:
+          summary: "High plugin execution failure rate"
+          description: "Plugin service has {{ $value }} execution failures per second."
+
+      - alert: PluginSandboxMemoryHigh
+        expr: plugin_sandbox_memory_usage_bytes / plugin_sandbox_memory_limit_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: plugin-service
+          category: resources
+        annotations:
+          summary: "Plugin sandbox memory usage high"
+          description: "Plugin {{ $labels.plugin_id }} is using {{ $value | humanizePercentage }} of sandbox memory."
+
+  # AI Service Alerts
+  - name: ai-service
+    rules:
+      - alert: AIServiceModelInferenceLatencyHigh
+        expr: histogram_quantile(0.95, rate(ai_service_inference_duration_ms_bucket[5m])) > 500
+        for: 3m
+        labels:
+          severity: warning
+          service: ai-service
+          category: performance
+        annotations:
+          summary: "High ML model inference latency"
+          description: "AI service model {{ $labels.model_id }} has 95th percentile inference latency of {{ $value }}ms."
+
+      - alert: AIServiceModelTrainingFailed
+        expr: increase(ai_service_training_jobs_failed_total[10m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: ai-service
+          category: training
+        annotations:
+          summary: "ML model training failed"
+          description: "AI service training job for model {{ $labels.model_id }} has failed."
+
+      - alert: AIServiceGPUUtilizationLow
+        expr: ai_service_gpu_utilization < 0.3
+        for: 10m
+        labels:
+          severity: info
+          service: ai-service
+          category: resources
+        annotations:
+          summary: "Low GPU utilization"
+          description: "AI service GPU utilization is {{ $value | humanizePercentage }} for more than 10 minutes."
+
+      - alert: AIServiceModelCacheHitRateLow
+        expr: ai_service_model_cache_hit_ratio < 0.7
+        for: 5m
+        labels:
+          severity: warning
+          service: ai-service
+          category: performance
+        annotations:
+          summary: "Low model cache hit rate"
+          description: "AI service model cache hit rate is {{ $value | humanizePercentage }}."
+
+  # Infrastructure Alerts
+  - name: infrastructure
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage"
+          description: "Node {{ $labels.instance }} has CPU usage of {{ $value }}% for more than 5 minutes."
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Node {{ $labels.instance }} has memory usage of {{ $value | humanizePercentage }}."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          category: storage
+        annotations:
+          summary: "Low disk space"
+          description: "Node {{ $labels.instance }} has less than 10% disk space remaining on {{ $labels.mountpoint }}."
+
+  # Database Alerts
+  - name: database
+    rules:
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL instance {{ $labels.instance }} is down."
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "High PostgreSQL connections"
+          description: "PostgreSQL has {{ $value | humanizePercentage }} of max connections in use."
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_database_tup_returned[5m]) / rate(pg_stat_database_tup_fetched[5m]) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "PostgreSQL query efficiency is {{ $value | humanizePercentage }}."
+
+  # Redis Alerts
+  - name: redis
+    rules:
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} is down."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis instance {{ $labels.instance }} is using {{ $value | humanizePercentage }} of available memory."
+
+      - alert: RedisHighConnections
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Redis high connection count"
+          description: "Redis instance {{ $labels.instance }} has {{ $value }} connected clients."
+
+  # Kafka Alerts
+  - name: kafka
+    rules:
+      - alert: KafkaBrokerDown
+        expr: kafka_brokers < 3
+        for: 1m
+        labels:
+          severity: critical
+          category: messaging
+        annotations:
+          summary: "Kafka broker down"
+          description: "Kafka cluster has only {{ $value }} brokers available."
+
+      - alert: KafkaHighLag
+        expr: kafka_consumer_lag_sum > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: messaging
+        annotations:
+          summary: "High Kafka consumer lag"
+          description: "Kafka consumer {{ $labels.consumer_group }} has lag of {{ $value }} messages."
+
+      - alert: KafkaHighDiskUsage
+        expr: kafka_log_size_bytes / kafka_log_size_limit_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: messaging
+        annotations:
+          summary: "High Kafka disk usage"
+          description: "Kafka topic {{ $labels.topic }} is using {{ $value | humanizePercentage }} of disk space."
+
+  # Kubernetes Alerts
+  - name: kubernetes
+    rules:
+      - alert: KubernetesPodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: kubernetes
+        annotations:
+          summary: "Pod crash looping"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping."
+
+      - alert: KubernetesNodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: kubernetes
+        annotations:
+          summary: "Kubernetes node not ready"
+          description: "Node {{ $labels.node }} is not ready."
+
+      - alert: KubernetesPodPending
+        expr: kube_pod_status_phase{phase="Pending"} == 1
+        for: 10m
+        labels:
+          severity: warning
+          category: kubernetes
+        annotations:
+          summary: "Pod stuck in pending state"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been pending for more than 10 minutes."
+
+  # Business Metrics Alerts
+  - name: business-metrics
+    rules:
+      - alert: LowUserRegistrations
+        expr: rate(user_registrations_total[1h]) < 1
+        for: 2h
+        labels:
+          severity: info
+          category: business
+        annotations:
+          summary: "Low user registration rate"
+          description: "User registration rate is {{ $value }} per hour for the last 2 hours."
+
+      - alert: HighChurnRate
+        expr: rate(user_cancellations_total[24h]) / rate(user_registrations_total[24h]) > 0.1
+        for: 1h
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "High user churn rate"
+          description: "User churn rate is {{ $value | humanizePercentage }} over the last 24 hours."
+
+      - alert: RevenueDropAlert
+        expr: rate(billing_revenue_total[24h]) < rate(billing_revenue_total[24h] offset 7d) * 0.8
+        for: 2h
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Revenue drop detected"
+          description: "Daily revenue is {{ $value | humanizePercentage }} lower than last week."
