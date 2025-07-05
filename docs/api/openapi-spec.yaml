@@ -1,0 +1,1235 @@
+openapi: 3.0.3
+info:
+  title: Ultimate AI-Native SaaS Platform API
+  description: |
+    Comprehensive API documentation for the Ultimate AI-Native SaaS Platform.
+    
+    This platform provides enterprise-grade multi-tenant SaaS capabilities with advanced AI/ML features,
+    extensible plugin system, and comprehensive user and tenant management.
+    
+    ## Features
+    - **Multi-tenant Architecture**: Complete tenant isolation and management
+    - **AI/ML Capabilities**: Advanced machine learning model management and inference
+    - **Plugin System**: Extensible plugin architecture with secure execution
+    - **User Management**: Comprehensive user authentication and authorization
+    - **Real-time Analytics**: Advanced usage tracking and billing integration
+    
+    ## Authentication
+    All API endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+    
+    ## Multi-tenancy
+    All requests must include the tenant ID in the X-Tenant-ID header:
+    ```
+    X-Tenant-ID: <your-tenant-uuid>
+    ```
+    
+    ## Rate Limiting
+    - General API: 1000 requests per 15 minutes
+    - AI Inference: 100 requests per minute
+    - Training: 10 jobs per hour
+    - Deployments: 5 deployments per hour
+  version: 1.0.0
+  contact:
+    name: Platform API Support
+    email: api-support@ultimate-saas.com
+    url: https://docs.ultimate-saas.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://ultimate-saas.com/terms
+
+servers:
+  - url: https://api.ultimate-saas.com/api/v1
+    description: Production server
+  - url: https://staging-api.ultimate-saas.com/api/v1
+    description: Staging server
+  - url: http://localhost:3000/api/v1
+    description: Development server
+
+security:
+  - BearerAuth: []
+  - TenantHeader: []
+
+paths:
+  # User Service Endpoints
+  /users:
+    get:
+      tags:
+        - Users
+      summary: List users
+      description: Retrieve a paginated list of users for the current tenant
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: search
+          in: query
+          description: Search users by name or email
+          schema:
+            type: string
+        - name: role
+          in: query
+          description: Filter users by role
+          schema:
+            type: string
+            enum: [admin, user, viewer, ml_engineer, data_scientist]
+        - name: status
+          in: query
+          description: Filter users by status
+          schema:
+            type: string
+            enum: [active, inactive, pending]
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+    post:
+      tags:
+        - Users
+      summary: Create user
+      description: Create a new user in the current tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /users/{userId}:
+    get:
+      tags:
+        - Users
+      summary: Get user
+      description: Retrieve a specific user by ID
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - Users
+      summary: Update user
+      description: Update an existing user
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/User'
+
+    delete:
+      tags:
+        - Users
+      summary: Delete user
+      description: Delete a user (soft delete)
+      parameters:
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # AI Service Endpoints
+  /ai/models:
+    get:
+      tags:
+        - AI Models
+      summary: List ML models
+      description: Retrieve a list of machine learning models
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: framework
+          in: query
+          description: Filter by ML framework
+          schema:
+            type: string
+            enum: [tensorflow, pytorch, scikit-learn, xgboost, onnx]
+        - name: category
+          in: query
+          description: Filter by model category
+          schema:
+            type: string
+            enum: [classification, regression, nlp, computer_vision, time_series, recommendation]
+        - name: status
+          in: query
+          description: Filter by model status
+          schema:
+            type: string
+            enum: [draft, training, trained, validated, deployed, retired]
+      responses:
+        '200':
+          description: List of ML models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      models:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MLModel'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags:
+        - AI Models
+      summary: Create ML model
+      description: Create a new machine learning model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMLModelRequest'
+      responses:
+        '201':
+          description: ML model created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/MLModel'
+
+  /ai/models/{modelId}/predict:
+    post:
+      tags:
+        - AI Inference
+      summary: Make prediction
+      description: Make a single prediction using the specified model
+      parameters:
+        - $ref: '#/components/parameters/ModelIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PredictionRequest'
+      responses:
+        '200':
+          description: Prediction result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/PredictionResult'
+
+  /ai/models/{modelId}/batch-predict:
+    post:
+      tags:
+        - AI Inference
+      summary: Batch prediction
+      description: Make batch predictions using the specified model
+      parameters:
+        - $ref: '#/components/parameters/ModelIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchPredictionRequest'
+      responses:
+        '200':
+          description: Batch prediction results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/BatchPredictionResult'
+
+  /ai/models/{modelId}/train:
+    post:
+      tags:
+        - AI Training
+      summary: Train model
+      description: Start training a machine learning model
+      parameters:
+        - $ref: '#/components/parameters/ModelIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainingRequest'
+      responses:
+        '202':
+          description: Training started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Training started"
+                  data:
+                    $ref: '#/components/schemas/TrainingJob'
+
+  /ai/models/{modelId}/deploy:
+    post:
+      tags:
+        - AI Deployment
+      summary: Deploy model
+      description: Deploy a trained model to Kubernetes
+      parameters:
+        - $ref: '#/components/parameters/ModelIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeploymentRequest'
+      responses:
+        '202':
+          description: Deployment started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Deployment started"
+                  data:
+                    $ref: '#/components/schemas/DeploymentResult'
+
+  # Plugin Service Endpoints
+  /plugins:
+    get:
+      tags:
+        - Plugins
+      summary: List plugins
+      description: Retrieve a list of available plugins
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: category
+          in: query
+          description: Filter by plugin category
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by plugin status
+          schema:
+            type: string
+            enum: [active, inactive, pending]
+      responses:
+        '200':
+          description: List of plugins
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      plugins:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Plugin'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+    post:
+      tags:
+        - Plugins
+      summary: Upload plugin
+      description: Upload a new plugin
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                plugin:
+                  type: string
+                  format: binary
+                  description: Plugin file (ZIP archive)
+                manifest:
+                  type: string
+                  description: Plugin manifest JSON
+      responses:
+        '201':
+          description: Plugin uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Plugin'
+
+  /plugins/{pluginId}/execute:
+    post:
+      tags:
+        - Plugins
+      summary: Execute plugin
+      description: Execute a plugin with provided input
+      parameters:
+        - $ref: '#/components/parameters/PluginIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PluginExecutionRequest'
+      responses:
+        '200':
+          description: Plugin execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/PluginExecutionResult'
+
+  # Tenant Service Endpoints
+  /tenants:
+    get:
+      tags:
+        - Tenants
+      summary: List tenants
+      description: Retrieve a list of tenants (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: List of tenants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      tenants:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Tenant'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /tenants/{tenantId}/usage:
+    get:
+      tags:
+        - Tenants
+      summary: Get tenant usage
+      description: Retrieve usage statistics for a tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantIdParam'
+        - name: period
+          in: query
+          description: Usage period
+          schema:
+            type: string
+            enum: [daily, weekly, monthly]
+            default: monthly
+      responses:
+        '200':
+          description: Tenant usage statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TenantUsage'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    TenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-ID
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    UserIdParam:
+      name: userId
+      in: path
+      required: true
+      description: User ID
+      schema:
+        type: string
+        format: uuid
+    ModelIdParam:
+      name: modelId
+      in: path
+      required: true
+      description: ML Model ID
+      schema:
+        type: string
+        format: uuid
+    PluginIdParam:
+      name: pluginId
+      in: path
+      required: true
+      description: Plugin ID
+      schema:
+        type: string
+        format: uuid
+    TenantIdParam:
+      name: tenantId
+      in: path
+      required: true
+      description: Tenant ID
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "John Doe"
+        role:
+          type: string
+          enum: [admin, user, viewer, ml_engineer, data_scientist]
+          example: "user"
+        status:
+          type: string
+          enum: [active, inactive, pending]
+          example: "active"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required:
+        - email
+        - name
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, user, viewer, ml_engineer, data_scientist]
+        password:
+          type: string
+          minLength: 8
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, user, viewer, ml_engineer, data_scientist]
+        status:
+          type: string
+          enum: [active, inactive, pending]
+
+    MLModel:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "Image Classifier"
+        description:
+          type: string
+          example: "CNN model for image classification"
+        framework:
+          type: string
+          enum: [tensorflow, pytorch, scikit-learn, xgboost, onnx]
+          example: "tensorflow"
+        category:
+          type: string
+          enum: [classification, regression, nlp, computer_vision, time_series, recommendation]
+          example: "computer_vision"
+        version:
+          type: string
+          example: "1.0.0"
+        status:
+          type: string
+          enum: [draft, training, trained, validated, deployed, retired]
+          example: "trained"
+        performanceMetrics:
+          type: object
+          properties:
+            accuracy:
+              type: number
+              example: 0.95
+            precision:
+              type: number
+              example: 0.93
+            recall:
+              type: number
+              example: 0.97
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateMLModelRequest:
+      type: object
+      required:
+        - name
+        - framework
+        - category
+        - configuration
+        - inputSchema
+        - outputSchema
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        framework:
+          type: string
+          enum: [tensorflow, pytorch, scikit-learn, xgboost, onnx]
+        category:
+          type: string
+          enum: [classification, regression, nlp, computer_vision, time_series, recommendation]
+        version:
+          type: string
+          default: "1.0.0"
+        configuration:
+          type: object
+        inputSchema:
+          type: object
+        outputSchema:
+          type: object
+        tags:
+          type: array
+          items:
+            type: string
+
+    PredictionRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          description: Input data for prediction
+        options:
+          type: object
+          properties:
+            includeConfidence:
+              type: boolean
+              default: false
+            includeFeatureImportance:
+              type: boolean
+              default: false
+
+    PredictionResult:
+      type: object
+      properties:
+        prediction:
+          type: object
+          description: Prediction result
+        confidence:
+          type: number
+          description: Prediction confidence score
+          minimum: 0
+          maximum: 1
+        featureImportance:
+          type: object
+          description: Feature importance scores
+        metadata:
+          type: object
+          properties:
+            modelId:
+              type: string
+              format: uuid
+            modelVersion:
+              type: string
+            framework:
+              type: string
+            inferenceTime:
+              type: number
+              description: Inference time in milliseconds
+
+    BatchPredictionRequest:
+      type: object
+      required:
+        - inputs
+      properties:
+        inputs:
+          type: array
+          items:
+            type: object
+          maxItems: 1000
+        options:
+          type: object
+          properties:
+            batchSize:
+              type: integer
+              default: 32
+            parallel:
+              type: boolean
+              default: true
+
+    BatchPredictionResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PredictionResult'
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              error:
+                type: string
+        metadata:
+          type: object
+          properties:
+            totalInputs:
+              type: integer
+            successfulPredictions:
+              type: integer
+            failedPredictions:
+              type: integer
+            totalInferenceTime:
+              type: number
+            averageInferenceTime:
+              type: number
+
+    TrainingRequest:
+      type: object
+      required:
+        - trainingConfig
+        - datasetConfig
+      properties:
+        trainingConfig:
+          type: object
+          properties:
+            epochs:
+              type: integer
+              minimum: 1
+            batchSize:
+              type: integer
+              minimum: 1
+            learningRate:
+              type: number
+              minimum: 0
+        datasetConfig:
+          type: object
+          properties:
+            trainPath:
+              type: string
+            validationPath:
+              type: string
+            testPath:
+              type: string
+        hyperparameters:
+          type: object
+        resourceConfig:
+          type: object
+          properties:
+            gpu:
+              type: boolean
+              default: false
+            memory:
+              type: string
+              example: "8Gi"
+            cpu:
+              type: string
+              example: "4"
+
+    TrainingJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 1
+        estimatedDuration:
+          type: integer
+          description: Estimated duration in seconds
+        currentEpoch:
+          type: integer
+        totalEpochs:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    DeploymentRequest:
+      type: object
+      required:
+        - deploymentName
+        - environment
+        - minReplicas
+        - maxReplicas
+        - resourceLimits
+      properties:
+        deploymentName:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+        environment:
+          type: string
+          enum: [development, staging, production]
+        minReplicas:
+          type: integer
+          minimum: 1
+          maximum: 100
+        maxReplicas:
+          type: integer
+          minimum: 1
+          maximum: 100
+        resourceLimits:
+          type: object
+          properties:
+            cpu:
+              type: string
+              example: "2"
+            memory:
+              type: string
+              example: "4Gi"
+            gpu:
+              type: string
+              example: "1"
+        healthCheck:
+          type: object
+          properties:
+            path:
+              type: string
+              default: "/health"
+            intervalSeconds:
+              type: integer
+              default: 30
+            timeoutSeconds:
+              type: integer
+              default: 10
+            failureThreshold:
+              type: integer
+              default: 3
+        autoscaling:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+              default: true
+            targetCPUUtilization:
+              type: integer
+              default: 70
+            targetMemoryUtilization:
+              type: integer
+              default: 80
+
+    DeploymentResult:
+      type: object
+      properties:
+        deploymentId:
+          type: string
+          format: uuid
+        endpointUrl:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum: [pending, deploying, healthy, unhealthy, failed]
+        replicas:
+          type: object
+          properties:
+            desired:
+              type: integer
+            ready:
+              type: integer
+            available:
+              type: integer
+        healthScore:
+          type: number
+          minimum: 0
+          maximum: 1
+        deployedAt:
+          type: string
+          format: date-time
+        estimatedReadyTime:
+          type: string
+          format: date-time
+
+    Plugin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, pending]
+        manifest:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PluginExecutionRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: object
+          description: Input data for plugin execution
+        options:
+          type: object
+          description: Plugin execution options
+
+    PluginExecutionResult:
+      type: object
+      properties:
+        output:
+          type: object
+          description: Plugin execution output
+        executionTime:
+          type: number
+          description: Execution time in milliseconds
+        logs:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        plan:
+          type: string
+          enum: [starter, professional, enterprise]
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+        limits:
+          type: object
+          properties:
+            maxUsers:
+              type: integer
+            maxModels:
+              type: integer
+            maxPlugins:
+              type: integer
+        usage:
+          type: object
+          properties:
+            currentUsers:
+              type: integer
+            currentModels:
+              type: integer
+            currentPlugins:
+              type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    TenantUsage:
+      type: object
+      properties:
+        period:
+          type: string
+        apiCalls:
+          type: integer
+        predictions:
+          type: integer
+        pluginExecutions:
+          type: integer
+        storageUsed:
+          type: integer
+          description: Storage used in bytes
+        costs:
+          type: object
+          properties:
+            total:
+              type: number
+            breakdown:
+              type: object
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        pages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Error message"
+        code:
+          type: string
+          example: "ERROR_CODE"
+        details:
+          type: object
+          description: Additional error details
+
+tags:
+  - name: Users
+    description: User management operations
+  - name: AI Models
+    description: Machine learning model management
+  - name: AI Inference
+    description: Model inference and prediction
+  - name: AI Training
+    description: Model training operations
+  - name: AI Deployment
+    description: Model deployment to Kubernetes
+  - name: Plugins
+    description: Plugin management and execution
+  - name: Tenants
+    description: Tenant management and usage tracking

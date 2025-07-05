@@ -1,0 +1,338 @@
+# Comprehensive Backup and Disaster Recovery for Ultimate AI-Native SaaS Platform
+# Automated backups for databases, configurations, and critical data
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-backup
+  namespace: default
+  labels:
+    app: platform-backup
+    component: backup
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: platform-backup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup-service-account
+          containers:
+          - name: backup
+            image: postgres:15
+            env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: postgres-password
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secrets
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secrets
+                  key: aws-secret-access-key
+            - name: S3_BUCKET
+              value: "ultimate-saas-backups"
+            - name: S3_REGION
+              value: "us-west-2"
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              # Install AWS CLI
+              apt-get update && apt-get install -y awscli
+              
+              # Set backup timestamp
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_DIR="/tmp/backup_${TIMESTAMP}"
+              mkdir -p ${BACKUP_DIR}
+              
+              echo "Starting platform backup at ${TIMESTAMP}"
+              
+              # Backup PostgreSQL databases
+              echo "Backing up PostgreSQL databases..."
+              
+              # Main platform database
+              pg_dump -h postgresql -U postgres -d platform_db > ${BACKUP_DIR}/platform_db_${TIMESTAMP}.sql
+              
+              # User service database
+              pg_dump -h postgresql -U postgres -d user_service_db > ${BACKUP_DIR}/user_service_db_${TIMESTAMP}.sql
+              
+              # Tenant service database
+              pg_dump -h postgresql -U postgres -d tenant_service_db > ${BACKUP_DIR}/tenant_service_db_${TIMESTAMP}.sql
+              
+              # Plugin service database
+              pg_dump -h postgresql -U postgres -d plugin_service_db > ${BACKUP_DIR}/plugin_service_db_${TIMESTAMP}.sql
+              
+              # AI service database
+              pg_dump -h postgresql -U postgres -d ai_service_db > ${BACKUP_DIR}/ai_service_db_${TIMESTAMP}.sql
+              
+              # Backup Redis data
+              echo "Backing up Redis data..."
+              redis-cli -h redis-master --rdb ${BACKUP_DIR}/redis_dump_${TIMESTAMP}.rdb
+              
+              # Backup Kubernetes configurations
+              echo "Backing up Kubernetes configurations..."
+              kubectl get all -o yaml > ${BACKUP_DIR}/k8s_resources_${TIMESTAMP}.yaml
+              kubectl get configmaps -o yaml > ${BACKUP_DIR}/k8s_configmaps_${TIMESTAMP}.yaml
+              kubectl get secrets -o yaml > ${BACKUP_DIR}/k8s_secrets_${TIMESTAMP}.yaml
+              kubectl get pv,pvc -o yaml > ${BACKUP_DIR}/k8s_storage_${TIMESTAMP}.yaml
+              
+              # Backup monitoring configurations
+              echo "Backing up monitoring configurations..."
+              kubectl get -n monitoring all -o yaml > ${BACKUP_DIR}/monitoring_resources_${TIMESTAMP}.yaml
+              
+              # Create backup manifest
+              echo "Creating backup manifest..."
+              cat > ${BACKUP_DIR}/backup_manifest_${TIMESTAMP}.json << EOF
+              {
+                "timestamp": "${TIMESTAMP}",
+                "backup_type": "full",
+                "databases": [
+                  "platform_db",
+                  "user_service_db", 
+                  "tenant_service_db",
+                  "plugin_service_db",
+                  "ai_service_db"
+                ],
+                "redis_backup": true,
+                "kubernetes_backup": true,
+                "monitoring_backup": true,
+                "retention_days": 30,
+                "backup_size_mb": $(du -sm ${BACKUP_DIR} | cut -f1)
+              }
+              EOF
+              
+              # Compress backup
+              echo "Compressing backup..."
+              tar -czf /tmp/platform_backup_${TIMESTAMP}.tar.gz -C /tmp backup_${TIMESTAMP}
+              
+              # Upload to S3
+              echo "Uploading backup to S3..."
+              aws s3 cp /tmp/platform_backup_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/daily/${TIMESTAMP}/platform_backup_${TIMESTAMP}.tar.gz
+              
+              # Upload manifest separately for easy access
+              aws s3 cp ${BACKUP_DIR}/backup_manifest_${TIMESTAMP}.json s3://${S3_BUCKET}/manifests/backup_manifest_${TIMESTAMP}.json
+              
+              # Cleanup old backups (keep last 30 days)
+              echo "Cleaning up old backups..."
+              CUTOFF_DATE=$(date -d '30 days ago' +%Y%m%d)
+              aws s3 ls s3://${S3_BUCKET}/daily/ | while read -r line; do
+                backup_date=$(echo $line | awk '{print $2}' | cut -d'/' -f1)
+                if [[ $backup_date < $CUTOFF_DATE ]]; then
+                  aws s3 rm s3://${S3_BUCKET}/daily/${backup_date}/ --recursive
+                  echo "Deleted old backup: ${backup_date}"
+                fi
+              done
+              
+              # Cleanup local files
+              rm -rf ${BACKUP_DIR}
+              rm -f /tmp/platform_backup_${TIMESTAMP}.tar.gz
+              
+              echo "Backup completed successfully at $(date)"
+              
+              # Send notification (optional)
+              if [ ! -z "${SLACK_WEBHOOK_URL}" ]; then
+                curl -X POST -H 'Content-type: application/json' \
+                  --data "{\"text\":\"✅ Platform backup completed successfully at ${TIMESTAMP}\"}" \
+                  ${SLACK_WEBHOOK_URL}
+              fi
+            resources:
+              requests:
+                cpu: 500m
+                memory: 1Gi
+              limits:
+                cpu: 2000m
+                memory: 4Gi
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /tmp
+          volumes:
+          - name: backup-storage
+            emptyDir:
+              sizeLimit: 10Gi
+
+---
+# Weekly full backup with longer retention
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: platform-weekly-backup
+  namespace: default
+  labels:
+    app: platform-backup
+    component: weekly-backup
+spec:
+  schedule: "0 1 * * 0"  # Weekly on Sunday at 1 AM
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: platform-backup
+            backup-type: weekly
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup-service-account
+          containers:
+          - name: weekly-backup
+            image: postgres:15
+            env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgresql-secret
+                  key: postgres-password
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secrets
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secrets
+                  key: aws-secret-access-key
+            - name: S3_BUCKET
+              value: "ultimate-saas-backups"
+            - name: BACKUP_TYPE
+              value: "weekly"
+            - name: RETENTION_DAYS
+              value: "90"
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              # Install required tools
+              apt-get update && apt-get install -y awscli
+              
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_DIR="/tmp/weekly_backup_${TIMESTAMP}"
+              mkdir -p ${BACKUP_DIR}
+              
+              echo "Starting weekly platform backup at ${TIMESTAMP}"
+              
+              # Full database backup with compression
+              echo "Creating compressed database backups..."
+              pg_dump -h postgresql -U postgres -d platform_db | gzip > ${BACKUP_DIR}/platform_db_${TIMESTAMP}.sql.gz
+              pg_dump -h postgresql -U postgres -d user_service_db | gzip > ${BACKUP_DIR}/user_service_db_${TIMESTAMP}.sql.gz
+              pg_dump -h postgresql -U postgres -d tenant_service_db | gzip > ${BACKUP_DIR}/tenant_service_db_${TIMESTAMP}.sql.gz
+              pg_dump -h postgresql -U postgres -d plugin_service_db | gzip > ${BACKUP_DIR}/plugin_service_db_${TIMESTAMP}.sql.gz
+              pg_dump -h postgresql -U postgres -d ai_service_db | gzip > ${BACKUP_DIR}/ai_service_db_${TIMESTAMP}.sql.gz
+              
+              # Backup persistent volumes
+              echo "Backing up persistent volume data..."
+              kubectl get pv -o yaml > ${BACKUP_DIR}/persistent_volumes_${TIMESTAMP}.yaml
+              
+              # Create comprehensive manifest
+              cat > ${BACKUP_DIR}/weekly_backup_manifest_${TIMESTAMP}.json << EOF
+              {
+                "timestamp": "${TIMESTAMP}",
+                "backup_type": "weekly",
+                "retention_days": 90,
+                "databases_compressed": true,
+                "persistent_volumes": true,
+                "backup_size_mb": $(du -sm ${BACKUP_DIR} | cut -f1),
+                "created_by": "weekly-backup-cronjob"
+              }
+              EOF
+              
+              # Create archive
+              tar -czf /tmp/weekly_platform_backup_${TIMESTAMP}.tar.gz -C /tmp weekly_backup_${TIMESTAMP}
+              
+              # Upload to S3 weekly folder
+              aws s3 cp /tmp/weekly_platform_backup_${TIMESTAMP}.tar.gz s3://${S3_BUCKET}/weekly/${TIMESTAMP}/weekly_platform_backup_${TIMESTAMP}.tar.gz
+              
+              # Cleanup old weekly backups (keep last 90 days)
+              CUTOFF_DATE=$(date -d '90 days ago' +%Y%m%d)
+              aws s3 ls s3://${S3_BUCKET}/weekly/ | while read -r line; do
+                backup_date=$(echo $line | awk '{print $2}' | cut -d'/' -f1)
+                if [[ $backup_date < $CUTOFF_DATE ]]; then
+                  aws s3 rm s3://${S3_BUCKET}/weekly/${backup_date}/ --recursive
+                  echo "Deleted old weekly backup: ${backup_date}"
+                fi
+              done
+              
+              # Cleanup
+              rm -rf ${BACKUP_DIR}
+              rm -f /tmp/weekly_platform_backup_${TIMESTAMP}.tar.gz
+              
+              echo "Weekly backup completed successfully at $(date)"
+            resources:
+              requests:
+                cpu: 1000m
+                memory: 2Gi
+              limits:
+                cpu: 4000m
+                memory: 8Gi
+
+---
+# Backup Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-service-account
+  namespace: default
+
+---
+# Backup ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backup-role
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets", "persistentvolumes", "persistentvolumeclaims"]
+  verbs: ["get", "list"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets"]
+  verbs: ["get", "list"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list"]
+
+---
+# Backup ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backup-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: backup-role
+subjects:
+- kind: ServiceAccount
+  name: backup-service-account
+  namespace: default
+
+---
+# Backup Secrets (to be created manually with actual credentials)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-secrets
+  namespace: default
+type: Opaque
+data:
+  aws-access-key-id: <base64-encoded-access-key>
+  aws-secret-access-key: <base64-encoded-secret-key>
+  slack-webhook-url: <base64-encoded-webhook-url>
