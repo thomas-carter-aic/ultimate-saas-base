@@ -379,6 +379,53 @@ services:
       timeout: 10s
       retries: 5
 
+  # Plugin Service
+  plugin-service:
+    build:
+      context: ./services/plugin-service
+      dockerfile: Dockerfile
+    container_name: saas-plugin-service
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: saas_platform
+      DB_USER: saas_user
+      DB_PASSWORD: saas_password
+      KAFKA_BROKERS: kafka:29092
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET:-plugin-storage-bucket}
+      JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      LOG_LEVEL: debug
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8080
+      OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+      OTEL_SERVICE_NAME: plugin-service
+      OTEL_SERVICE_VERSION: 1.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - saas-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    volumes:
+      - plugin_storage:/app/plugins
+
 networks:
   saas-network:
     driver: bridge
@@ -398,4 +445,6 @@ volumes:
   ollama_data:
     driver: local
   kong_data:
+    driver: local
+  plugin_storage:
     driver: local

@@ -1,0 +1,92 @@
+{
+  "name": "@ultimate-saas/plugin-service",
+  "version": "1.0.0",
+  "description": "Plugin Service for AI-Native SaaS Platform - Dynamic plugin loading and execution",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "docker:build": "docker build -t plugin-service .",
+    "docker:run": "docker run -p 3003:3003 plugin-service"
+  },
+  "keywords": [
+    "plugin",
+    "microservice",
+    "saas",
+    "extensibility",
+    "dynamic-loading",
+    "sandbox",
+    "nodejs"
+  ],
+  "author": "Ultimate SaaS Platform Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "compression": "^1.7.4",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "multer": "^1.4.5-lts.1",
+    "archiver": "^6.0.1",
+    "unzipper": "^0.10.14",
+    "vm2": "^3.9.19",
+    "isolated-vm": "^4.6.0",
+    "semver": "^7.5.4",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.11.3",
+    "redis": "^4.6.10",
+    "jsonschema": "^1.4.1",
+    "tar": "^6.2.0",
+    "chokidar": "^3.5.3",
+    "dotenv": "^16.3.1",
+    "prom-client": "^15.0.0",
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/sdk-node": "^0.45.0",
+    "@opentelemetry/instrumentation-express": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/compression": "^1.7.5",
+    "@types/multer": "^1.4.11",
+    "@types/archiver": "^6.0.2",
+    "@types/unzipper": "^0.10.9",
+    "@types/semver": "^7.5.6",
+    "@types/uuid": "^9.0.7",
+    "@types/tar": "^6.1.10",
+    "@types/jest": "^29.5.8",
+    "@types/supertest": "^2.0.16",
+    "typescript": "^5.3.2",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "supertest": "^6.3.3",
+    "eslint": "^8.54.0",
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "@typescript-eslint/parser": "^6.12.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ultimate-saas/platform.git",
+    "directory": "services/plugin-service"
+  },
+  "bugs": {
+    "url": "https://github.com/ultimate-saas/platform/issues"
+  },
+  "homepage": "https://github.com/ultimate-saas/platform#readme"
+}
